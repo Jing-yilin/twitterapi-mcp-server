@@ -1,13 +1,13 @@
 {
-  "name": "twitterapi-mcp",
+  "name": "twitterapi-mcp-server",
   "version": "1.0.0",
   "description": "MCP server for TwitterAPI.io - Access Twitter data through a unified API interface",
-  "author": "MCP Developer",
+  "author": "yilin",
   "license": "MIT",
   "main": "build/index.js",
   "type": "commonjs",
   "bin": {
-    "twitterapi-mcp": "build/index.js"
+    "twitterapi-mcp-server": "build/index.js"
   },
   "scripts": {
     "build": "tsc && chmod +x build/index.js",
@@ -29,7 +29,8 @@
     "data",
     "twitterapi.io",
     "claude",
-    "llm"
+    "llm",
+    "model-context-protocol"
   ],
   "engines": {
     "node": ">=18.0.0"
@@ -45,10 +46,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/twitterapi-mcp.git"
+    "url": "git+https://github.com/Jing-yilin/twitterapi-mcp-server.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/twitterapi-mcp/issues"
+    "url": "https://github.com/Jing-yilin/twitterapi-mcp-server/issues"
   },
-  "homepage": "https://github.com/yourusername/twitterapi-mcp#readme"
+  "homepage": "https://github.com/Jing-yilin/twitterapi-mcp-server#readme"
 }
