@@ -73,7 +73,7 @@ class TwitterAPIMCPServer {
   private apiClient: AxiosInstance;
   private apiKey: string;
   private loginCookie: string | null = null;
-  private jsonHandler = new JsonResponseHandler({ maxItemsForContext: 10 });
+  private jsonHandler = new JsonResponseHandler();
 
   constructor() {
     // Get API key from environment
@@ -135,6 +135,11 @@ class TwitterAPIMCPServer {
                   type: 'string',
                   description: 'Optional directory path to save the full raw JSON response locally',
                 },
+                max_items: {
+                  type: 'integer',
+                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  default: 3,
+                },
               },
               required: ['username'],
             },
@@ -152,6 +157,11 @@ class TwitterAPIMCPServer {
                 raw_data_save_dir: {
                   type: 'string',
                   description: 'Optional directory path to save the full raw JSON response locally',
+                },
+                max_items: {
+                  type: 'integer',
+                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  default: 3,
                 },
               },
               required: ['user_id'],
@@ -184,6 +194,11 @@ class TwitterAPIMCPServer {
                   type: 'string',
                   description: 'Optional directory path to save the full raw JSON response locally',
                 },
+                max_items: {
+                  type: 'integer',
+                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  default: 3,
+                },
               },
               required: [],
             },
@@ -212,6 +227,11 @@ class TwitterAPIMCPServer {
                   type: 'string',
                   description: 'Optional directory path to save the full raw JSON response locally',
                 },
+                max_items: {
+                  type: 'integer',
+                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  default: 3,
+                },
               },
               required: ['query'],
             },
@@ -230,6 +250,11 @@ class TwitterAPIMCPServer {
                 raw_data_save_dir: {
                   type: 'string',
                   description: 'Optional directory path to save the full raw JSON response locally',
+                },
+                max_items: {
+                  type: 'integer',
+                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  default: 3,
                 },
               },
               required: ['tweet_ids'],
@@ -261,6 +286,11 @@ class TwitterAPIMCPServer {
                   type: 'string',
                   description: 'Optional directory path to save the full raw JSON response locally',
                 },
+                max_items: {
+                  type: 'integer',
+                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  default: 3,
+                },
               },
               required: ['tweetId'],
             },
@@ -288,6 +318,11 @@ class TwitterAPIMCPServer {
                 raw_data_save_dir: {
                   type: 'string',
                   description: 'Optional directory path to save the full raw JSON response locally',
+                },
+                max_items: {
+                  type: 'integer',
+                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  default: 3,
                 },
               },
               required: ['username'],
@@ -317,6 +352,11 @@ class TwitterAPIMCPServer {
                   type: 'string',
                   description: 'Optional directory path to save the full raw JSON response locally',
                 },
+                max_items: {
+                  type: 'integer',
+                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  default: 3,
+                },
               },
               required: ['username'],
             },
@@ -338,6 +378,11 @@ class TwitterAPIMCPServer {
                 raw_data_save_dir: {
                   type: 'string',
                   description: 'Optional directory path to save the full raw JSON response locally',
+                },
+                max_items: {
+                  type: 'integer',
+                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  default: 3,
                 },
               },
               required: ['query'],
@@ -421,13 +466,15 @@ class TwitterAPIMCPServer {
           case 'get_user_by_username':
             return await this.getUserByUsername(
               args.username as string,
-              args.raw_data_save_dir as string | undefined
+              args.raw_data_save_dir as string | undefined,
+              args.max_items as number | undefined
             );
 
           case 'get_user_by_id':
             return await this.getUserById(
               args.user_id as string,
-              args.raw_data_save_dir as string | undefined
+              args.raw_data_save_dir as string | undefined,
+              args.max_items as number | undefined
             );
 
           case 'get_user_tweets':
@@ -436,7 +483,8 @@ class TwitterAPIMCPServer {
               args.userId as string,
               args.cursor as string,
               args.includeReplies as boolean,
-              args.raw_data_save_dir as string | undefined
+              args.raw_data_save_dir as string | undefined,
+              args.max_items as number | undefined
             );
 
           case 'search_tweets':
@@ -444,13 +492,15 @@ class TwitterAPIMCPServer {
               args.query as string,
               args.queryType as string,
               args.cursor as string,
-              args.raw_data_save_dir as string | undefined
+              args.raw_data_save_dir as string | undefined,
+              args.max_items as number | undefined
             );
 
           case 'get_tweet_by_id':
             return await this.getTweetById(
               args.tweet_ids as string[],
-              args.raw_data_save_dir as string | undefined
+              args.raw_data_save_dir as string | undefined,
+              args.max_items as number | undefined
             );
 
           case 'get_tweet_replies':
@@ -459,7 +509,8 @@ class TwitterAPIMCPServer {
               args.cursor as string,
               args.sinceTime as number,
               args.untilTime as number,
-              args.raw_data_save_dir as string | undefined
+              args.raw_data_save_dir as string | undefined,
+              args.max_items as number | undefined
             );
 
           case 'get_user_followers':
@@ -467,7 +518,8 @@ class TwitterAPIMCPServer {
               args.username as string,
               args.cursor as string,
               args.pageSize as number,
-              args.raw_data_save_dir as string | undefined
+              args.raw_data_save_dir as string | undefined,
+              args.max_items as number | undefined
             );
 
           case 'get_user_following':
@@ -475,14 +527,16 @@ class TwitterAPIMCPServer {
               args.username as string,
               args.cursor as string,
               args.pageSize as number,
-              args.raw_data_save_dir as string | undefined
+              args.raw_data_save_dir as string | undefined,
+              args.max_items as number | undefined
             );
 
           case 'search_users':
             return await this.searchUsers(
               args.query as string,
               args.cursor as string,
-              args.raw_data_save_dir as string | undefined
+              args.raw_data_save_dir as string | undefined,
+              args.max_items as number | undefined
             );
 
           case 'login_user':
@@ -577,19 +631,21 @@ class TwitterAPIMCPServer {
     }
   }
 
-  private async getUserByUsername(username: string, rawDataSaveDir?: string): Promise<CallToolResult> {
+  private async getUserByUsername(username: string, rawDataSaveDir?: string, maxItems?: number): Promise<CallToolResult> {
     const data = await this.makeRequest(`/user/info`, { userName: username });
     return this.jsonHandler.formatResponse(data, {
       ...(rawDataSaveDir && { rawDataSaveDir }),
+      ...(maxItems && { maxItems }),
       toolName: 'get_user_by_username',
       params: { username }
     });
   }
 
-  private async getUserById(userId: string, rawDataSaveDir?: string): Promise<CallToolResult> {
+  private async getUserById(userId: string, rawDataSaveDir?: string, maxItems?: number): Promise<CallToolResult> {
     const data = await this.makeRequest(`/user/info`, { user_id: userId });
     return this.jsonHandler.formatResponse(data, {
       ...(rawDataSaveDir && { rawDataSaveDir }),
+      ...(maxItems && { maxItems }),
       toolName: 'get_user_by_id',
       params: { user_id: userId }
     });
@@ -600,7 +656,8 @@ class TwitterAPIMCPServer {
     userId?: string,
     cursor?: string,
     includeReplies: boolean = false,
-    rawDataSaveDir?: string
+    rawDataSaveDir?: string,
+    maxItems?: number
   ): Promise<CallToolResult> {
     if (!username && !userId) {
       throw new Error('Either username or userId must be provided');
@@ -615,6 +672,7 @@ class TwitterAPIMCPServer {
     const data = await this.makeRequest(`/user/last_tweets`, params);
     return this.jsonHandler.formatResponse(data, {
       ...(rawDataSaveDir && { rawDataSaveDir }),
+      ...(maxItems && { maxItems }),
       toolName: 'get_user_tweets',
       params: { username, userId, cursor, includeReplies }
     });
@@ -624,7 +682,8 @@ class TwitterAPIMCPServer {
     query: string,
     queryType: string = 'Latest',
     cursor?: string,
-    rawDataSaveDir?: string
+    rawDataSaveDir?: string,
+    maxItems?: number
   ): Promise<CallToolResult> {
     const params: Record<string, any> = {
       query,
@@ -636,16 +695,18 @@ class TwitterAPIMCPServer {
     const data = await this.makeRequest(`/tweet/advanced_search`, params);
     return this.jsonHandler.formatResponse(data, {
       ...(rawDataSaveDir && { rawDataSaveDir }),
+      ...(maxItems && { maxItems }),
       toolName: 'search_tweets',
       params: { query, queryType, cursor }
     });
   }
 
-  private async getTweetById(tweetIds: string[], rawDataSaveDir?: string): Promise<CallToolResult> {
+  private async getTweetById(tweetIds: string[], rawDataSaveDir?: string, maxItems?: number): Promise<CallToolResult> {
     // API expects comma-separated string
     const data = await this.makeRequest(`/tweets`, { tweet_ids: tweetIds.join(',') });
     return this.jsonHandler.formatResponse(data, {
       ...(rawDataSaveDir && { rawDataSaveDir }),
+      ...(maxItems && { maxItems }),
       toolName: 'get_tweet_by_id',
       params: { tweet_ids: tweetIds.join(',') }
     });
@@ -656,7 +717,8 @@ class TwitterAPIMCPServer {
     cursor?: string,
     sinceTime?: number,
     untilTime?: number,
-    rawDataSaveDir?: string
+    rawDataSaveDir?: string,
+    maxItems?: number
   ): Promise<CallToolResult> {
     const params: Record<string, any> = { tweetId };
     if (cursor) params.cursor = cursor;
@@ -666,6 +728,7 @@ class TwitterAPIMCPServer {
     const data = await this.makeRequest(`/tweet/replies`, params);
     return this.jsonHandler.formatResponse(data, {
       ...(rawDataSaveDir && { rawDataSaveDir }),
+      ...(maxItems && { maxItems }),
       toolName: 'get_tweet_replies',
       params: { tweetId, cursor, sinceTime, untilTime }
     });
@@ -675,7 +738,8 @@ class TwitterAPIMCPServer {
     username: string,
     cursor?: string,
     pageSize: number = 200,
-    rawDataSaveDir?: string
+    rawDataSaveDir?: string,
+    maxItems?: number
   ): Promise<CallToolResult> {
     const params: Record<string, any> = {
       userName: username,
@@ -686,6 +750,7 @@ class TwitterAPIMCPServer {
     const data = await this.makeRequest(`/user/followers`, params);
     return this.jsonHandler.formatResponse(data, {
       ...(rawDataSaveDir && { rawDataSaveDir }),
+      ...(maxItems && { maxItems }),
       toolName: 'get_user_followers',
       params: { username, cursor, pageSize }
     });
@@ -695,7 +760,8 @@ class TwitterAPIMCPServer {
     username: string,
     cursor?: string,
     pageSize: number = 200,
-    rawDataSaveDir?: string
+    rawDataSaveDir?: string,
+    maxItems?: number
   ): Promise<CallToolResult> {
     const params: Record<string, any> = {
       userName: username,
@@ -706,18 +772,20 @@ class TwitterAPIMCPServer {
     const data = await this.makeRequest(`/user/followings`, params);
     return this.jsonHandler.formatResponse(data, {
       ...(rawDataSaveDir && { rawDataSaveDir }),
+      ...(maxItems && { maxItems }),
       toolName: 'get_user_following',
       params: { username, cursor, pageSize }
     });
   }
 
-  private async searchUsers(query: string, cursor?: string, rawDataSaveDir?: string): Promise<CallToolResult> {
+  private async searchUsers(query: string, cursor?: string, rawDataSaveDir?: string, maxItems?: number): Promise<CallToolResult> {
     const params: Record<string, any> = { query };
     if (cursor) params.cursor = cursor;
 
     const data = await this.makeRequest(`/user/search`, params);
     return this.jsonHandler.formatResponse(data, {
       ...(rawDataSaveDir && { rawDataSaveDir }),
+      ...(maxItems && { maxItems }),
       toolName: 'search_users',
       params: { query, cursor }
     });
