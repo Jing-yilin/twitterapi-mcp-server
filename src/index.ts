@@ -12,6 +12,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { HttpsProxyAgent } from 'https-proxy-agent';
+import { JsonResponseHandler } from '@yilin-jing/mcp-json-utils';
 
 /**
  * Interface definitions for TwitterAPI.io responses
@@ -72,6 +73,7 @@ class TwitterAPIMCPServer {
   private apiClient: AxiosInstance;
   private apiKey: string;
   private loginCookie: string | null = null;
+  private jsonHandler = new JsonResponseHandler({ maxItemsForContext: 10 });
 
   constructor() {
     // Get API key from environment
@@ -129,6 +131,10 @@ class TwitterAPIMCPServer {
                   type: 'string',
                   description: 'Twitter username (without @)',
                 },
+                raw_data_save_dir: {
+                  type: 'string',
+                  description: 'Optional directory path to save the full raw JSON response locally',
+                },
               },
               required: ['username'],
             },
@@ -142,6 +148,10 @@ class TwitterAPIMCPServer {
                 user_id: {
                   type: 'string',
                   description: 'Twitter user ID',
+                },
+                raw_data_save_dir: {
+                  type: 'string',
+                  description: 'Optional directory path to save the full raw JSON response locally',
                 },
               },
               required: ['user_id'],
@@ -170,6 +180,10 @@ class TwitterAPIMCPServer {
                   description: 'Include reply tweets (default: false)',
                   default: false,
                 },
+                raw_data_save_dir: {
+                  type: 'string',
+                  description: 'Optional directory path to save the full raw JSON response locally',
+                },
               },
               required: [],
             },
@@ -194,6 +208,10 @@ class TwitterAPIMCPServer {
                   type: 'string',
                   description: 'Pagination cursor for fetching next page (empty string for first page)',
                 },
+                raw_data_save_dir: {
+                  type: 'string',
+                  description: 'Optional directory path to save the full raw JSON response locally',
+                },
               },
               required: ['query'],
             },
@@ -208,6 +226,10 @@ class TwitterAPIMCPServer {
                   type: 'array',
                   items: { type: 'string' },
                   description: 'Array of Twitter tweet IDs to retrieve',
+                },
+                raw_data_save_dir: {
+                  type: 'string',
+                  description: 'Optional directory path to save the full raw JSON response locally',
                 },
               },
               required: ['tweet_ids'],
@@ -235,6 +257,10 @@ class TwitterAPIMCPServer {
                   type: 'integer',
                   description: 'Unix timestamp in seconds - get replies before this time',
                 },
+                raw_data_save_dir: {
+                  type: 'string',
+                  description: 'Optional directory path to save the full raw JSON response locally',
+                },
               },
               required: ['tweetId'],
             },
@@ -258,6 +284,10 @@ class TwitterAPIMCPServer {
                   description: 'Number of followers per page (default: 200, max: 200)',
                   minimum: 1,
                   maximum: 200,
+                },
+                raw_data_save_dir: {
+                  type: 'string',
+                  description: 'Optional directory path to save the full raw JSON response locally',
                 },
               },
               required: ['username'],
@@ -283,6 +313,10 @@ class TwitterAPIMCPServer {
                   minimum: 1,
                   maximum: 200,
                 },
+                raw_data_save_dir: {
+                  type: 'string',
+                  description: 'Optional directory path to save the full raw JSON response locally',
+                },
               },
               required: ['username'],
             },
@@ -300,6 +334,10 @@ class TwitterAPIMCPServer {
                 cursor: {
                   type: 'string',
                   description: 'Pagination cursor for fetching next page',
+                },
+                raw_data_save_dir: {
+                  type: 'string',
+                  description: 'Optional directory path to save the full raw JSON response locally',
                 },
               },
               required: ['query'],
@@ -381,55 +419,70 @@ class TwitterAPIMCPServer {
 
         switch (name) {
           case 'get_user_by_username':
-            return await this.getUserByUsername(args.username as string);
+            return await this.getUserByUsername(
+              args.username as string,
+              args.raw_data_save_dir as string | undefined
+            );
 
           case 'get_user_by_id':
-            return await this.getUserById(args.user_id as string);
+            return await this.getUserById(
+              args.user_id as string,
+              args.raw_data_save_dir as string | undefined
+            );
 
           case 'get_user_tweets':
             return await this.getUserTweets(
               args.username as string,
               args.userId as string,
               args.cursor as string,
-              args.includeReplies as boolean
+              args.includeReplies as boolean,
+              args.raw_data_save_dir as string | undefined
             );
 
           case 'search_tweets':
             return await this.searchTweets(
               args.query as string,
               args.queryType as string,
-              args.cursor as string
+              args.cursor as string,
+              args.raw_data_save_dir as string | undefined
             );
 
           case 'get_tweet_by_id':
-            return await this.getTweetById(args.tweet_ids as string[]);
+            return await this.getTweetById(
+              args.tweet_ids as string[],
+              args.raw_data_save_dir as string | undefined
+            );
 
           case 'get_tweet_replies':
             return await this.getTweetReplies(
               args.tweetId as string,
               args.cursor as string,
               args.sinceTime as number,
-              args.untilTime as number
+              args.untilTime as number,
+              args.raw_data_save_dir as string | undefined
             );
 
           case 'get_user_followers':
             return await this.getUserFollowers(
               args.username as string,
               args.cursor as string,
-              args.pageSize as number
+              args.pageSize as number,
+              args.raw_data_save_dir as string | undefined
             );
 
           case 'get_user_following':
             return await this.getUserFollowing(
               args.username as string,
               args.cursor as string,
-              args.pageSize as number
+              args.pageSize as number,
+              args.raw_data_save_dir as string | undefined
             );
 
           case 'search_users':
             return await this.searchUsers(
               args.query as string,
-              args.cursor as string
+              args.cursor as string,
+              args.raw_data_save_dir as string | undefined
             );
 
           case 'login_user':
@@ -524,35 +577,30 @@ class TwitterAPIMCPServer {
     }
   }
 
-  private async getUserByUsername(username: string): Promise<CallToolResult> {
+  private async getUserByUsername(username: string, rawDataSaveDir?: string): Promise<CallToolResult> {
     const data = await this.makeRequest(`/user/info`, { userName: username });
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(data, null, 2),
-        },
-      ],
-    };
+    return this.jsonHandler.formatResponse(data, {
+      ...(rawDataSaveDir && { rawDataSaveDir }),
+      toolName: 'get_user_by_username',
+      params: { username }
+    });
   }
 
-  private async getUserById(userId: string): Promise<CallToolResult> {
+  private async getUserById(userId: string, rawDataSaveDir?: string): Promise<CallToolResult> {
     const data = await this.makeRequest(`/user/info`, { user_id: userId });
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(data, null, 2),
-        },
-      ],
-    };
+    return this.jsonHandler.formatResponse(data, {
+      ...(rawDataSaveDir && { rawDataSaveDir }),
+      toolName: 'get_user_by_id',
+      params: { user_id: userId }
+    });
   }
 
   private async getUserTweets(
     username?: string,
     userId?: string,
     cursor?: string,
-    includeReplies: boolean = false
+    includeReplies: boolean = false,
+    rawDataSaveDir?: string
   ): Promise<CallToolResult> {
     if (!username && !userId) {
       throw new Error('Either username or userId must be provided');
@@ -565,20 +613,18 @@ class TwitterAPIMCPServer {
     params.includeReplies = includeReplies;
 
     const data = await this.makeRequest(`/user/last_tweets`, params);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(data, null, 2),
-        },
-      ],
-    };
+    return this.jsonHandler.formatResponse(data, {
+      ...(rawDataSaveDir && { rawDataSaveDir }),
+      toolName: 'get_user_tweets',
+      params: { username, userId, cursor, includeReplies }
+    });
   }
 
   private async searchTweets(
     query: string,
     queryType: string = 'Latest',
-    cursor?: string
+    cursor?: string,
+    rawDataSaveDir?: string
   ): Promise<CallToolResult> {
     const params: Record<string, any> = {
       query,
@@ -588,34 +634,29 @@ class TwitterAPIMCPServer {
       params.cursor = cursor;
     }
     const data = await this.makeRequest(`/tweet/advanced_search`, params);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(data, null, 2),
-        },
-      ],
-    };
+    return this.jsonHandler.formatResponse(data, {
+      ...(rawDataSaveDir && { rawDataSaveDir }),
+      toolName: 'search_tweets',
+      params: { query, queryType, cursor }
+    });
   }
 
-  private async getTweetById(tweetIds: string[]): Promise<CallToolResult> {
+  private async getTweetById(tweetIds: string[], rawDataSaveDir?: string): Promise<CallToolResult> {
     // API expects comma-separated string
     const data = await this.makeRequest(`/tweets`, { tweet_ids: tweetIds.join(',') });
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(data, null, 2),
-        },
-      ],
-    };
+    return this.jsonHandler.formatResponse(data, {
+      ...(rawDataSaveDir && { rawDataSaveDir }),
+      toolName: 'get_tweet_by_id',
+      params: { tweet_ids: tweetIds.join(',') }
+    });
   }
 
   private async getTweetReplies(
     tweetId: string,
     cursor?: string,
     sinceTime?: number,
-    untilTime?: number
+    untilTime?: number,
+    rawDataSaveDir?: string
   ): Promise<CallToolResult> {
     const params: Record<string, any> = { tweetId };
     if (cursor) params.cursor = cursor;
@@ -623,20 +664,18 @@ class TwitterAPIMCPServer {
     if (untilTime) params.untilTime = untilTime;
 
     const data = await this.makeRequest(`/tweet/replies`, params);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(data, null, 2),
-        },
-      ],
-    };
+    return this.jsonHandler.formatResponse(data, {
+      ...(rawDataSaveDir && { rawDataSaveDir }),
+      toolName: 'get_tweet_replies',
+      params: { tweetId, cursor, sinceTime, untilTime }
+    });
   }
 
   private async getUserFollowers(
     username: string,
     cursor?: string,
-    pageSize: number = 200
+    pageSize: number = 200,
+    rawDataSaveDir?: string
   ): Promise<CallToolResult> {
     const params: Record<string, any> = {
       userName: username,
@@ -645,20 +684,18 @@ class TwitterAPIMCPServer {
     if (cursor) params.cursor = cursor;
 
     const data = await this.makeRequest(`/user/followers`, params);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(data, null, 2),
-        },
-      ],
-    };
+    return this.jsonHandler.formatResponse(data, {
+      ...(rawDataSaveDir && { rawDataSaveDir }),
+      toolName: 'get_user_followers',
+      params: { username, cursor, pageSize }
+    });
   }
 
   private async getUserFollowing(
     username: string,
     cursor?: string,
-    pageSize: number = 200
+    pageSize: number = 200,
+    rawDataSaveDir?: string
   ): Promise<CallToolResult> {
     const params: Record<string, any> = {
       userName: username,
@@ -667,29 +704,23 @@ class TwitterAPIMCPServer {
     if (cursor) params.cursor = cursor;
 
     const data = await this.makeRequest(`/user/followings`, params);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(data, null, 2),
-        },
-      ],
-    };
+    return this.jsonHandler.formatResponse(data, {
+      ...(rawDataSaveDir && { rawDataSaveDir }),
+      toolName: 'get_user_following',
+      params: { username, cursor, pageSize }
+    });
   }
 
-  private async searchUsers(query: string, cursor?: string): Promise<CallToolResult> {
+  private async searchUsers(query: string, cursor?: string, rawDataSaveDir?: string): Promise<CallToolResult> {
     const params: Record<string, any> = { query };
     if (cursor) params.cursor = cursor;
 
     const data = await this.makeRequest(`/user/search`, params);
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(data, null, 2),
-        },
-      ],
-    };
+    return this.jsonHandler.formatResponse(data, {
+      ...(rawDataSaveDir && { rawDataSaveDir }),
+      toolName: 'search_users',
+      params: { query, cursor }
+    });
   }
 
   private async loginUser(
