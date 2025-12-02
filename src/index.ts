@@ -149,7 +149,7 @@ class TwitterAPIMCPServer {
           } as Tool,
           {
             name: 'get_user_tweets',
-            description: 'Get tweets from a specific user',
+            description: 'Get tweets from a specific user (returns up to 20 per page)',
             inputSchema: {
               type: 'object',
               properties: {
@@ -157,14 +157,21 @@ class TwitterAPIMCPServer {
                   type: 'string',
                   description: 'Twitter username (without @)',
                 },
-                count: {
-                  type: 'number',
-                  description: 'Number of tweets to retrieve (default: 10, max: 100)',
-                  minimum: 1,
-                  maximum: 100,
+                userId: {
+                  type: 'string',
+                  description: 'Twitter user ID (alternative to username)',
+                },
+                cursor: {
+                  type: 'string',
+                  description: 'Pagination cursor for fetching next page',
+                },
+                includeReplies: {
+                  type: 'boolean',
+                  description: 'Include reply tweets (default: false)',
+                  default: false,
                 },
               },
-              required: ['username'],
+              required: [],
             },
           } as Tool,
           {
@@ -175,18 +182,17 @@ class TwitterAPIMCPServer {
               properties: {
                 query: {
                   type: 'string',
-                  description: 'Search query for tweets',
+                  description: 'Search query for tweets (e.g., "AI" OR "Twitter" from:elonmusk since:2021-12-31)',
                 },
-                count: {
-                  type: 'number',
-                  description: 'Number of tweets to retrieve (default: 10, max: 100)',
-                  minimum: 1,
-                  maximum: 100,
-                },
-                result_type: {
+                queryType: {
                   type: 'string',
                   description: 'Type of search results',
-                  enum: ['recent', 'popular', 'mixed'],
+                  enum: ['Latest', 'Top'],
+                  default: 'Latest',
+                },
+                cursor: {
+                  type: 'string',
+                  description: 'Pagination cursor for fetching next page (empty string for first page)',
                 },
               },
               required: ['query'],
@@ -194,41 +200,48 @@ class TwitterAPIMCPServer {
           } as Tool,
           {
             name: 'get_tweet_by_id',
-            description: 'Get a specific tweet by its ID',
+            description: 'Get one or more tweets by their IDs',
             inputSchema: {
               type: 'object',
               properties: {
-                tweet_id: {
-                  type: 'string',
-                  description: 'Twitter tweet ID',
+                tweet_ids: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Array of Twitter tweet IDs to retrieve',
                 },
               },
-              required: ['tweet_id'],
+              required: ['tweet_ids'],
             },
           } as Tool,
           {
             name: 'get_tweet_replies',
-            description: 'Get replies to a specific tweet',
+            description: 'Get replies to a specific tweet (returns up to 20 per page)',
             inputSchema: {
               type: 'object',
               properties: {
-                tweet_id: {
+                tweetId: {
                   type: 'string',
-                  description: 'Twitter tweet ID',
+                  description: 'Twitter tweet ID (must be an original tweet, not a reply)',
                 },
-                count: {
-                  type: 'number',
-                  description: 'Number of replies to retrieve (default: 10, max: 100)',
-                  minimum: 1,
-                  maximum: 100,
+                cursor: {
+                  type: 'string',
+                  description: 'Pagination cursor for fetching next page',
+                },
+                sinceTime: {
+                  type: 'integer',
+                  description: 'Unix timestamp in seconds - get replies on or after this time',
+                },
+                untilTime: {
+                  type: 'integer',
+                  description: 'Unix timestamp in seconds - get replies before this time',
                 },
               },
-              required: ['tweet_id'],
+              required: ['tweetId'],
             },
           } as Tool,
           {
             name: 'get_user_followers',
-            description: 'Get followers of a specific user',
+            description: 'Get followers of a specific user (returns up to 200 per page)',
             inputSchema: {
               type: 'object',
               properties: {
@@ -236,11 +249,15 @@ class TwitterAPIMCPServer {
                   type: 'string',
                   description: 'Twitter username (without @)',
                 },
-                count: {
-                  type: 'number',
-                  description: 'Number of followers to retrieve (default: 20, max: 100)',
+                cursor: {
+                  type: 'string',
+                  description: 'Pagination cursor for fetching next page',
+                },
+                pageSize: {
+                  type: 'integer',
+                  description: 'Number of followers per page (default: 200, max: 200)',
                   minimum: 1,
-                  maximum: 100,
+                  maximum: 200,
                 },
               },
               required: ['username'],
@@ -248,7 +265,7 @@ class TwitterAPIMCPServer {
           } as Tool,
           {
             name: 'get_user_following',
-            description: 'Get users that a specific user is following',
+            description: 'Get users that a specific user is following (returns up to 200 per page)',
             inputSchema: {
               type: 'object',
               properties: {
@@ -256,11 +273,15 @@ class TwitterAPIMCPServer {
                   type: 'string',
                   description: 'Twitter username (without @)',
                 },
-                count: {
-                  type: 'number',
-                  description: 'Number of following to retrieve (default: 20, max: 100)',
+                cursor: {
+                  type: 'string',
+                  description: 'Pagination cursor for fetching next page',
+                },
+                pageSize: {
+                  type: 'integer',
+                  description: 'Number of following per page (default: 200, max: 200)',
                   minimum: 1,
-                  maximum: 100,
+                  maximum: 200,
                 },
               },
               required: ['username'],
@@ -268,19 +289,17 @@ class TwitterAPIMCPServer {
           } as Tool,
           {
             name: 'search_users',
-            description: 'Search for Twitter users',
+            description: 'Search for Twitter users by keyword',
             inputSchema: {
               type: 'object',
               properties: {
                 query: {
                   type: 'string',
-                  description: 'Search query for users',
+                  description: 'Search keyword for finding users',
                 },
-                count: {
-                  type: 'number',
-                  description: 'Number of users to retrieve (default: 10, max: 50)',
-                  minimum: 1,
-                  maximum: 50,
+                cursor: {
+                  type: 'string',
+                  description: 'Pagination cursor for fetching next page',
                 },
               },
               required: ['query'],
@@ -288,39 +307,64 @@ class TwitterAPIMCPServer {
           } as Tool,
           {
             name: 'login_user',
-            description: 'Login to Twitter account for write actions (requires username and password)',
+            description: 'Login to Twitter account for write actions (posting tweets, etc.)',
             inputSchema: {
               type: 'object',
               properties: {
-                username: {
+                user_name: {
                   type: 'string',
-                  description: 'Twitter username or email',
+                  description: 'Twitter username',
+                },
+                email: {
+                  type: 'string',
+                  description: 'Email associated with Twitter account',
                 },
                 password: {
                   type: 'string',
                   description: 'Twitter password',
                 },
+                proxy: {
+                  type: 'string',
+                  description: 'High-quality residential proxy in format: http://username:password@ip:port',
+                },
+                totp_secret: {
+                  type: 'string',
+                  description: '2FA secret from user profile (optional, improves login reliability)',
+                },
               },
-              required: ['username', 'password'],
+              required: ['user_name', 'email', 'password', 'proxy'],
             },
           } as Tool,
           {
             name: 'create_tweet',
-            description: 'Create a new tweet (requires login)',
+            description: 'Create a new tweet (requires login first)',
             inputSchema: {
               type: 'object',
               properties: {
-                text: {
+                tweet_text: {
                   type: 'string',
-                  description: 'Tweet text (max 280 characters)',
+                  description: 'Tweet text content (max 280 characters)',
                   maxLength: 280,
                 },
-                reply_to: {
+                proxy: {
+                  type: 'string',
+                  description: 'Proxy configuration (same proxy used for login)',
+                },
+                reply_to_tweet_id: {
                   type: 'string',
                   description: 'Tweet ID to reply to (optional)',
                 },
+                attachment_url: {
+                  type: 'string',
+                  description: 'URL for attached content (optional)',
+                },
+                media_ids: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Array of media IDs to attach (optional)',
+                },
               },
-              required: ['text'],
+              required: ['tweet_text', 'proxy'],
             },
           } as Tool,
         ],
@@ -345,53 +389,65 @@ class TwitterAPIMCPServer {
           case 'get_user_tweets':
             return await this.getUserTweets(
               args.username as string,
-              args.count as number
+              args.userId as string,
+              args.cursor as string,
+              args.includeReplies as boolean
             );
 
           case 'search_tweets':
             return await this.searchTweets(
               args.query as string,
-              args.count as number,
-              args.result_type as string
+              args.queryType as string,
+              args.cursor as string
             );
 
           case 'get_tweet_by_id':
-            return await this.getTweetById(args.tweet_id as string);
+            return await this.getTweetById(args.tweet_ids as string[]);
 
           case 'get_tweet_replies':
             return await this.getTweetReplies(
-              args.tweet_id as string,
-              args.count as number
+              args.tweetId as string,
+              args.cursor as string,
+              args.sinceTime as number,
+              args.untilTime as number
             );
 
           case 'get_user_followers':
             return await this.getUserFollowers(
               args.username as string,
-              args.count as number
+              args.cursor as string,
+              args.pageSize as number
             );
 
           case 'get_user_following':
             return await this.getUserFollowing(
               args.username as string,
-              args.count as number
+              args.cursor as string,
+              args.pageSize as number
             );
 
           case 'search_users':
             return await this.searchUsers(
               args.query as string,
-              args.count as number
+              args.cursor as string
             );
 
           case 'login_user':
             return await this.loginUser(
-              args.username as string,
-              args.password as string
+              args.user_name as string,
+              args.email as string,
+              args.password as string,
+              args.proxy as string,
+              args.totp_secret as string
             );
 
           case 'create_tweet':
             return await this.createTweet(
-              args.text as string,
-              args.reply_to as string
+              args.tweet_text as string,
+              args.proxy as string,
+              args.reply_to_tweet_id as string,
+              args.attachment_url as string,
+              args.media_ids as string[]
             );
 
           default:
@@ -492,11 +548,23 @@ class TwitterAPIMCPServer {
     };
   }
 
-  private async getUserTweets(username: string, count: number = 10): Promise<CallToolResult> {
-    const data = await this.makeRequest(`/user/last_tweets`, {
-      userName: username,
-      count: Math.min(count, 100),
-    });
+  private async getUserTweets(
+    username?: string,
+    userId?: string,
+    cursor?: string,
+    includeReplies: boolean = false
+  ): Promise<CallToolResult> {
+    if (!username && !userId) {
+      throw new Error('Either username or userId must be provided');
+    }
+
+    const params: Record<string, any> = {};
+    if (username) params.userName = username;
+    if (userId) params.userId = userId;
+    if (cursor) params.cursor = cursor;
+    params.includeReplies = includeReplies;
+
+    const data = await this.makeRequest(`/user/last_tweets`, params);
     return {
       content: [
         {
@@ -509,14 +577,17 @@ class TwitterAPIMCPServer {
 
   private async searchTweets(
     query: string,
-    count: number = 10,
-    resultType: string = 'recent'
+    queryType: string = 'Latest',
+    cursor?: string
   ): Promise<CallToolResult> {
-    const data = await this.makeRequest(`/tweet/advanced_search`, {
+    const params: Record<string, any> = {
       query,
-      count: Math.min(count, 100),
-      result_type: resultType,
-    });
+      queryType,
+    };
+    if (cursor) {
+      params.cursor = cursor;
+    }
+    const data = await this.makeRequest(`/tweet/advanced_search`, params);
     return {
       content: [
         {
@@ -527,8 +598,8 @@ class TwitterAPIMCPServer {
     };
   }
 
-  private async getTweetById(tweetId: string): Promise<CallToolResult> {
-    const data = await this.makeRequest(`/tweets`, { tweet_id: tweetId });
+  private async getTweetById(tweetIds: string[]): Promise<CallToolResult> {
+    const data = await this.makeRequest(`/tweets`, { tweet_ids: tweetIds });
     return {
       content: [
         {
@@ -539,11 +610,18 @@ class TwitterAPIMCPServer {
     };
   }
 
-  private async getTweetReplies(tweetId: string, count: number = 10): Promise<CallToolResult> {
-    const data = await this.makeRequest(`/tweet/replies`, {
-      id: tweetId,
-      count: Math.min(count, 100),
-    });
+  private async getTweetReplies(
+    tweetId: string,
+    cursor?: string,
+    sinceTime?: number,
+    untilTime?: number
+  ): Promise<CallToolResult> {
+    const params: Record<string, any> = { tweetId };
+    if (cursor) params.cursor = cursor;
+    if (sinceTime) params.sinceTime = sinceTime;
+    if (untilTime) params.untilTime = untilTime;
+
+    const data = await this.makeRequest(`/tweet/replies`, params);
     return {
       content: [
         {
@@ -554,11 +632,18 @@ class TwitterAPIMCPServer {
     };
   }
 
-  private async getUserFollowers(username: string, count: number = 20): Promise<CallToolResult> {
-    const data = await this.makeRequest(`/user/followers`, {
+  private async getUserFollowers(
+    username: string,
+    cursor?: string,
+    pageSize: number = 200
+  ): Promise<CallToolResult> {
+    const params: Record<string, any> = {
       userName: username,
-      count: Math.min(count, 100),
-    });
+      pageSize: Math.min(pageSize, 200),
+    };
+    if (cursor) params.cursor = cursor;
+
+    const data = await this.makeRequest(`/user/followers`, params);
     return {
       content: [
         {
@@ -569,11 +654,18 @@ class TwitterAPIMCPServer {
     };
   }
 
-  private async getUserFollowing(username: string, count: number = 20): Promise<CallToolResult> {
-    const data = await this.makeRequest(`/user/followings`, {
+  private async getUserFollowing(
+    username: string,
+    cursor?: string,
+    pageSize: number = 200
+  ): Promise<CallToolResult> {
+    const params: Record<string, any> = {
       userName: username,
-      count: Math.min(count, 100),
-    });
+      pageSize: Math.min(pageSize, 200),
+    };
+    if (cursor) params.cursor = cursor;
+
+    const data = await this.makeRequest(`/user/followings`, params);
     return {
       content: [
         {
@@ -584,11 +676,11 @@ class TwitterAPIMCPServer {
     };
   }
 
-  private async searchUsers(query: string, count: number = 10): Promise<CallToolResult> {
-    const data = await this.makeRequest(`/user/search`, {
-      query,
-      count: Math.min(count, 50),
-    });
+  private async searchUsers(query: string, cursor?: string): Promise<CallToolResult> {
+    const params: Record<string, any> = { query };
+    if (cursor) params.cursor = cursor;
+
+    const data = await this.makeRequest(`/user/search`, params);
     return {
       content: [
         {
@@ -599,16 +691,29 @@ class TwitterAPIMCPServer {
     };
   }
 
-  private async loginUser(username: string, password: string): Promise<CallToolResult> {
+  private async loginUser(
+    userName: string,
+    email: string,
+    password: string,
+    proxy: string,
+    totpSecret?: string
+  ): Promise<CallToolResult> {
     try {
-      const loginData = await this.makePostRequest('/user_login_v2', {
-        userName: username,
+      const loginPayload: Record<string, any> = {
+        user_name: userName,
+        email,
         password,
-      });
+        proxy,
+      };
+      if (totpSecret) {
+        loginPayload.totp_secret = totpSecret;
+      }
 
-      // Store login cookie for future requests
-      if (loginData.cookie) {
-        this.loginCookie = loginData.cookie;
+      const loginData = await this.makePostRequest('/user_login_v2', loginPayload);
+
+      // Store login cookie for future requests (API returns login_cookie)
+      if (loginData.login_cookie) {
+        this.loginCookie = loginData.login_cookie;
       }
 
       return {
@@ -616,9 +721,9 @@ class TwitterAPIMCPServer {
           {
             type: 'text',
             text: JSON.stringify({
-              success: true,
-              message: 'Login successful',
-              user: loginData.user || {},
+              success: loginData.status === 'success',
+              message: loginData.msg || 'Login successful',
+              login_cookie: loginData.login_cookie,
             }, null, 2),
           },
         ],
@@ -638,14 +743,30 @@ class TwitterAPIMCPServer {
     }
   }
 
-  private async createTweet(text: string, replyTo?: string): Promise<CallToolResult> {
+  private async createTweet(
+    tweetText: string,
+    proxy: string,
+    replyToTweetId?: string,
+    attachmentUrl?: string,
+    mediaIds?: string[]
+  ): Promise<CallToolResult> {
     if (!this.loginCookie) {
       throw new Error('Must login first before creating tweets');
     }
 
-    const tweetData: Record<string, any> = { text };
-    if (replyTo) {
-      tweetData.reply_to = replyTo;
+    const tweetData: Record<string, any> = {
+      login_cookies: this.loginCookie,
+      tweet_text: tweetText,
+      proxy,
+    };
+    if (replyToTweetId) {
+      tweetData.reply_to_tweet_id = replyToTweetId;
+    }
+    if (attachmentUrl) {
+      tweetData.attachment_url = attachmentUrl;
+    }
+    if (mediaIds && mediaIds.length > 0) {
+      tweetData.media_ids = mediaIds;
     }
 
     const data = await this.makePostRequest('/create_tweet_v2', tweetData);
