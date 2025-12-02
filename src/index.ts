@@ -599,7 +599,8 @@ class TwitterAPIMCPServer {
   }
 
   private async getTweetById(tweetIds: string[]): Promise<CallToolResult> {
-    const data = await this.makeRequest(`/tweets`, { tweet_ids: tweetIds });
+    // API expects comma-separated string
+    const data = await this.makeRequest(`/tweets`, { tweet_ids: tweetIds.join(',') });
     return {
       content: [
         {
