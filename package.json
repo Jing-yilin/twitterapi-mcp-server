@@ -1,5 +1,5 @@
 {
-  "name": "twitterapi-mcp-server",
+  "name": "@yilin-jing/twitterapi-mcp",
   "version": "1.0.0",
   "description": "MCP server for TwitterAPI.io - Access Twitter data through a unified API interface",
   "author": "yilin",
