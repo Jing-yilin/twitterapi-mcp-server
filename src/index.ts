@@ -12,57 +12,59 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { JsonResponseHandler } from '@yilin-jing/mcp-json-utils';
+import { encode } from '@toon-format/toon';
+import * as fs from 'fs';
+import * as path from 'path';
 
-/**
- * Interface definitions for TwitterAPI.io responses
- */
-interface TwitterUser {
-  id: string;
-  username: string;
-  name: string;
-  description?: string;
-  verified?: boolean;
-  followers_count?: number;
-  following_count?: number;
-  tweet_count?: number;
-  profile_image_url?: string;
-  created_at?: string;
-}
+// Data cleaners for Twitter entities
+const DataCleaners = {
+  cleanUser: (user: any): any => {
+    if (!user) return null;
+    return {
+      id: user.id,
+      username: user.userName || user.screen_name || user.username,
+      name: user.name,
+      description: user.description,
+      verified: user.isVerified || user.verified || user.isBlueVerified,
+      followers: user.followers ?? user.followers_count,
+      following: user.following ?? user.following_count,
+      tweets: user.statusesCount ?? user.statuses_count ?? user.tweet_count,
+      location: user.location || undefined,
+      url: user.url || undefined,
+      created: user.createdAt || user.created_at,
+    };
+  },
 
-interface Tweet {
-  id: string;
-  text: string;
-  author: TwitterUser;
-  created_at: string;
-  public_metrics?: {
-    retweet_count: number;
-    like_count: number;
-    reply_count: number;
-    quote_count: number;
-  };
-  in_reply_to?: string;
-  referenced_tweets?: Array<{
-    type: 'retweeted' | 'quoted' | 'replied_to';
-    id: string;
-  }>;
-}
+  cleanTweet: (tweet: any): any => {
+    if (!tweet) return null;
+    return {
+      id: tweet.id,
+      text: tweet.text,
+      author: tweet.author ? DataCleaners.cleanUser(tweet.author) : undefined,
+      created: tweet.createdAt || tweet.created_at,
+      retweets: tweet.retweetCount ?? tweet.public_metrics?.retweet_count,
+      likes: tweet.likeCount ?? tweet.public_metrics?.like_count,
+      replies: tweet.replyCount ?? tweet.public_metrics?.reply_count,
+      quotes: tweet.quoteCount ?? tweet.public_metrics?.quote_count,
+      views: tweet.viewCount,
+      isReply: tweet.isReply,
+      isRetweet: tweet.isRetweet,
+      inReplyTo: tweet.inReplyToId || tweet.in_reply_to,
+      conversationId: tweet.conversationId,
+      lang: tweet.lang,
+    };
+  },
 
-interface SearchResponse {
-  data: Tweet[];
-  meta?: {
-    result_count: number;
-    next_token?: string;
-  };
-}
+  cleanUserList: (users: any[]): any[] => {
+    if (!Array.isArray(users)) return [];
+    return users.map(DataCleaners.cleanUser).filter(Boolean);
+  },
 
-interface UserResponse {
-  data: TwitterUser;
-}
-
-interface TweetsResponse {
-  data: Tweet[];
-}
+  cleanTweetList: (tweets: any[]): any[] => {
+    if (!Array.isArray(tweets)) return [];
+    return tweets.map(DataCleaners.cleanTweet).filter(Boolean);
+  },
+};
 
 /**
  * TwitterAPI.io MCP Server
@@ -73,7 +75,6 @@ class TwitterAPIMCPServer {
   private apiClient: AxiosInstance;
   private apiKey: string;
   private loginCookie: string | null = null;
-  private jsonHandler = new JsonResponseHandler();
 
   constructor() {
     // Get API key from environment
@@ -123,7 +124,7 @@ class TwitterAPIMCPServer {
         tools: [
           {
             name: 'get_user_by_username',
-            description: 'Get Twitter user information by username',
+            description: 'Get Twitter user info by username. Returns cleaned data in TOON format.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -131,13 +132,13 @@ class TwitterAPIMCPServer {
                   type: 'string',
                   description: 'Twitter username (without @)',
                 },
-                raw_data_save_dir: {
+                save_dir: {
                   type: 'string',
-                  description: 'Optional directory path to save the full raw JSON response locally',
+                  description: 'Directory to save cleaned JSON data',
                 },
                 max_items: {
                   type: 'integer',
-                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  description: 'Maximum number of items to return in arrays (default: 3). Cleaned data output.',
                   default: 3,
                 },
               },
@@ -146,7 +147,7 @@ class TwitterAPIMCPServer {
           } as Tool,
           {
             name: 'get_user_by_id',
-            description: 'Get Twitter user information by user ID',
+            description: 'Get Twitter user info by ID. Returns cleaned data in TOON format.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -154,13 +155,13 @@ class TwitterAPIMCPServer {
                   type: 'string',
                   description: 'Twitter user ID',
                 },
-                raw_data_save_dir: {
+                save_dir: {
                   type: 'string',
-                  description: 'Optional directory path to save the full raw JSON response locally',
+                  description: 'Directory to save cleaned JSON data',
                 },
                 max_items: {
                   type: 'integer',
-                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  description: 'Maximum number of items to return in arrays (default: 3). Cleaned data output.',
                   default: 3,
                 },
               },
@@ -169,7 +170,7 @@ class TwitterAPIMCPServer {
           } as Tool,
           {
             name: 'get_user_tweets',
-            description: 'Get tweets from a specific user (returns up to 20 per page)',
+            description: 'Get tweets from a user. Returns cleaned data in TOON format.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -190,13 +191,13 @@ class TwitterAPIMCPServer {
                   description: 'Include reply tweets (default: false)',
                   default: false,
                 },
-                raw_data_save_dir: {
+                save_dir: {
                   type: 'string',
-                  description: 'Optional directory path to save the full raw JSON response locally',
+                  description: 'Directory to save cleaned JSON data',
                 },
                 max_items: {
                   type: 'integer',
-                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  description: 'Maximum number of items to return in arrays (default: 3). Cleaned data output.',
                   default: 3,
                 },
               },
@@ -205,7 +206,7 @@ class TwitterAPIMCPServer {
           } as Tool,
           {
             name: 'search_tweets',
-            description: 'Search for tweets using keywords',
+            description: 'Search tweets by keywords. Returns cleaned data in TOON format.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -223,13 +224,13 @@ class TwitterAPIMCPServer {
                   type: 'string',
                   description: 'Pagination cursor for fetching next page (empty string for first page)',
                 },
-                raw_data_save_dir: {
+                save_dir: {
                   type: 'string',
-                  description: 'Optional directory path to save the full raw JSON response locally',
+                  description: 'Directory to save cleaned JSON data',
                 },
                 max_items: {
                   type: 'integer',
-                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  description: 'Maximum number of items to return in arrays (default: 3). Cleaned data output.',
                   default: 3,
                 },
               },
@@ -238,7 +239,7 @@ class TwitterAPIMCPServer {
           } as Tool,
           {
             name: 'get_tweet_by_id',
-            description: 'Get one or more tweets by their IDs',
+            description: 'Get tweets by IDs. Returns cleaned data in TOON format.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -247,13 +248,13 @@ class TwitterAPIMCPServer {
                   items: { type: 'string' },
                   description: 'Array of Twitter tweet IDs to retrieve',
                 },
-                raw_data_save_dir: {
+                save_dir: {
                   type: 'string',
-                  description: 'Optional directory path to save the full raw JSON response locally',
+                  description: 'Directory to save cleaned JSON data',
                 },
                 max_items: {
                   type: 'integer',
-                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  description: 'Maximum number of items to return in arrays (default: 3). Cleaned data output.',
                   default: 3,
                 },
               },
@@ -262,7 +263,7 @@ class TwitterAPIMCPServer {
           } as Tool,
           {
             name: 'get_tweet_replies',
-            description: 'Get replies to a specific tweet (returns up to 20 per page)',
+            description: 'Get tweet replies. Returns cleaned data in TOON format.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -282,13 +283,13 @@ class TwitterAPIMCPServer {
                   type: 'integer',
                   description: 'Unix timestamp in seconds - get replies before this time',
                 },
-                raw_data_save_dir: {
+                save_dir: {
                   type: 'string',
-                  description: 'Optional directory path to save the full raw JSON response locally',
+                  description: 'Directory to save cleaned JSON data',
                 },
                 max_items: {
                   type: 'integer',
-                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  description: 'Maximum number of items to return in arrays (default: 3). Cleaned data output.',
                   default: 3,
                 },
               },
@@ -297,7 +298,7 @@ class TwitterAPIMCPServer {
           } as Tool,
           {
             name: 'get_user_followers',
-            description: 'Get followers of a specific user (returns up to 200 per page)',
+            description: 'Get user followers. Returns cleaned data in TOON format.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -315,13 +316,13 @@ class TwitterAPIMCPServer {
                   minimum: 1,
                   maximum: 200,
                 },
-                raw_data_save_dir: {
+                save_dir: {
                   type: 'string',
-                  description: 'Optional directory path to save the full raw JSON response locally',
+                  description: 'Directory to save cleaned JSON data',
                 },
                 max_items: {
                   type: 'integer',
-                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  description: 'Maximum number of items to return in arrays (default: 3). Cleaned data output.',
                   default: 3,
                 },
               },
@@ -330,7 +331,7 @@ class TwitterAPIMCPServer {
           } as Tool,
           {
             name: 'get_user_following',
-            description: 'Get users that a specific user is following (returns up to 200 per page)',
+            description: 'Get user following. Returns cleaned data in TOON format.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -348,13 +349,13 @@ class TwitterAPIMCPServer {
                   minimum: 1,
                   maximum: 200,
                 },
-                raw_data_save_dir: {
+                save_dir: {
                   type: 'string',
-                  description: 'Optional directory path to save the full raw JSON response locally',
+                  description: 'Directory to save cleaned JSON data',
                 },
                 max_items: {
                   type: 'integer',
-                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  description: 'Maximum number of items to return in arrays (default: 3). Cleaned data output.',
                   default: 3,
                 },
               },
@@ -363,7 +364,7 @@ class TwitterAPIMCPServer {
           } as Tool,
           {
             name: 'search_users',
-            description: 'Search for Twitter users by keyword',
+            description: 'Search users by keyword. Returns cleaned data in TOON format.',
             inputSchema: {
               type: 'object',
               properties: {
@@ -375,13 +376,13 @@ class TwitterAPIMCPServer {
                   type: 'string',
                   description: 'Pagination cursor for fetching next page',
                 },
-                raw_data_save_dir: {
+                save_dir: {
                   type: 'string',
-                  description: 'Optional directory path to save the full raw JSON response locally',
+                  description: 'Directory to save cleaned JSON data',
                 },
                 max_items: {
                   type: 'integer',
-                  description: 'Maximum number of items to return in arrays (default: 3). Full data available via raw_data_save_dir.',
+                  description: 'Maximum number of items to return in arrays (default: 3). Cleaned data output.',
                   default: 3,
                 },
               },
@@ -466,14 +467,14 @@ class TwitterAPIMCPServer {
           case 'get_user_by_username':
             return await this.getUserByUsername(
               args.username as string,
-              args.raw_data_save_dir as string | undefined,
+              args.save_dir as string | undefined,
               args.max_items as number | undefined
             );
 
           case 'get_user_by_id':
             return await this.getUserById(
               args.user_id as string,
-              args.raw_data_save_dir as string | undefined,
+              args.save_dir as string | undefined,
               args.max_items as number | undefined
             );
 
@@ -483,7 +484,7 @@ class TwitterAPIMCPServer {
               args.userId as string,
               args.cursor as string,
               args.includeReplies as boolean,
-              args.raw_data_save_dir as string | undefined,
+              args.save_dir as string | undefined,
               args.max_items as number | undefined
             );
 
@@ -492,14 +493,14 @@ class TwitterAPIMCPServer {
               args.query as string,
               args.queryType as string,
               args.cursor as string,
-              args.raw_data_save_dir as string | undefined,
+              args.save_dir as string | undefined,
               args.max_items as number | undefined
             );
 
           case 'get_tweet_by_id':
             return await this.getTweetById(
               args.tweet_ids as string[],
-              args.raw_data_save_dir as string | undefined,
+              args.save_dir as string | undefined,
               args.max_items as number | undefined
             );
 
@@ -509,7 +510,7 @@ class TwitterAPIMCPServer {
               args.cursor as string,
               args.sinceTime as number,
               args.untilTime as number,
-              args.raw_data_save_dir as string | undefined,
+              args.save_dir as string | undefined,
               args.max_items as number | undefined
             );
 
@@ -518,7 +519,7 @@ class TwitterAPIMCPServer {
               args.username as string,
               args.cursor as string,
               args.pageSize as number,
-              args.raw_data_save_dir as string | undefined,
+              args.save_dir as string | undefined,
               args.max_items as number | undefined
             );
 
@@ -527,7 +528,7 @@ class TwitterAPIMCPServer {
               args.username as string,
               args.cursor as string,
               args.pageSize as number,
-              args.raw_data_save_dir as string | undefined,
+              args.save_dir as string | undefined,
               args.max_items as number | undefined
             );
 
@@ -535,7 +536,7 @@ class TwitterAPIMCPServer {
             return await this.searchUsers(
               args.query as string,
               args.cursor as string,
-              args.raw_data_save_dir as string | undefined,
+              args.save_dir as string | undefined,
               args.max_items as number | undefined
             );
 
@@ -631,24 +632,48 @@ class TwitterAPIMCPServer {
     }
   }
 
-  private async getUserByUsername(username: string, rawDataSaveDir?: string, maxItems?: number): Promise<CallToolResult> {
-    const data = await this.makeRequest(`/user/info`, { userName: username });
-    return this.jsonHandler.formatResponse(data, {
-      ...(rawDataSaveDir && { rawDataSaveDir }),
-      ...(maxItems && { maxItems }),
-      toolName: 'get_user_by_username',
-      params: { username }
-    });
+  private saveData(data: any, dir: string, toolName: string): string {
+    try {
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const filename = `${toolName}_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+      const filepath = path.join(dir, filename);
+      fs.writeFileSync(filepath, JSON.stringify(data, null, 2));
+      return filepath;
+    } catch (e) {
+      return `Error saving: ${e}`;
+    }
   }
 
-  private async getUserById(userId: string, rawDataSaveDir?: string, maxItems?: number): Promise<CallToolResult> {
+  private formatResponse(cleanedData: any, options: { saveDir?: string; toolName?: string; pagination?: any }): CallToolResult {
+    const output: any = { data: cleanedData };
+    if (options.pagination) {
+      output.pagination = {
+        hasNextPage: options.pagination.has_next_page,
+        nextCursor: options.pagination.next_cursor,
+      };
+    }
+
+    let savedPath = '';
+    if (options.saveDir && options.toolName) {
+      savedPath = this.saveData(output, options.saveDir, options.toolName);
+    }
+
+    let text = encode(output);
+    if (savedPath) text += `\n\n[Cleaned data saved to: ${savedPath}]`;
+
+    return { content: [{ type: 'text', text }] };
+  }
+
+  private async getUserByUsername(username: string, saveDir?: string, maxItems?: number): Promise<CallToolResult> {
+    const data = await this.makeRequest(`/user/info`, { userName: username });
+    const cleaned = DataCleaners.cleanUser(data.data || data);
+    return this.formatResponse(cleaned, { ...(saveDir && { saveDir }), toolName: 'get_user_by_username' });
+  }
+
+  private async getUserById(userId: string, saveDir?: string, maxItems?: number): Promise<CallToolResult> {
     const data = await this.makeRequest(`/user/info`, { user_id: userId });
-    return this.jsonHandler.formatResponse(data, {
-      ...(rawDataSaveDir && { rawDataSaveDir }),
-      ...(maxItems && { maxItems }),
-      toolName: 'get_user_by_id',
-      params: { user_id: userId }
-    });
+    const cleaned = DataCleaners.cleanUser(data.data || data);
+    return this.formatResponse(cleaned, { ...(saveDir && { saveDir }), toolName: 'get_user_by_id' });
   }
 
   private async getUserTweets(
@@ -656,7 +681,7 @@ class TwitterAPIMCPServer {
     userId?: string,
     cursor?: string,
     includeReplies: boolean = false,
-    rawDataSaveDir?: string,
+    saveDir?: string,
     maxItems?: number
   ): Promise<CallToolResult> {
     if (!username && !userId) {
@@ -670,11 +695,13 @@ class TwitterAPIMCPServer {
     params.includeReplies = includeReplies;
 
     const data = await this.makeRequest(`/user/last_tweets`, params);
-    return this.jsonHandler.formatResponse(data, {
-      ...(rawDataSaveDir && { rawDataSaveDir }),
-      ...(maxItems && { maxItems }),
+    const tweets = data.tweets || data.data || [];
+    const max = maxItems || 10;
+    const cleaned = DataCleaners.cleanTweetList(tweets).slice(0, max);
+    return this.formatResponse(cleaned, {
+      ...(saveDir && { saveDir }),
       toolName: 'get_user_tweets',
-      params: { username, userId, cursor, includeReplies }
+      pagination: { has_next_page: data.has_next_page, next_cursor: data.next_cursor }
     });
   }
 
@@ -682,34 +709,28 @@ class TwitterAPIMCPServer {
     query: string,
     queryType: string = 'Latest',
     cursor?: string,
-    rawDataSaveDir?: string,
+    saveDir?: string,
     maxItems?: number
   ): Promise<CallToolResult> {
-    const params: Record<string, any> = {
-      query,
-      queryType,
-    };
-    if (cursor) {
-      params.cursor = cursor;
-    }
+    const params: Record<string, any> = { query, queryType };
+    if (cursor) params.cursor = cursor;
+
     const data = await this.makeRequest(`/tweet/advanced_search`, params);
-    return this.jsonHandler.formatResponse(data, {
-      ...(rawDataSaveDir && { rawDataSaveDir }),
-      ...(maxItems && { maxItems }),
+    const tweets = data.tweets || data.data || [];
+    const max = maxItems || 10;
+    const cleaned = DataCleaners.cleanTweetList(tweets).slice(0, max);
+    return this.formatResponse(cleaned, {
+      ...(saveDir && { saveDir }),
       toolName: 'search_tweets',
-      params: { query, queryType, cursor }
+      pagination: { has_next_page: data.has_next_page, next_cursor: data.next_cursor }
     });
   }
 
-  private async getTweetById(tweetIds: string[], rawDataSaveDir?: string, maxItems?: number): Promise<CallToolResult> {
-    // API expects comma-separated string
+  private async getTweetById(tweetIds: string[], saveDir?: string, maxItems?: number): Promise<CallToolResult> {
     const data = await this.makeRequest(`/tweets`, { tweet_ids: tweetIds.join(',') });
-    return this.jsonHandler.formatResponse(data, {
-      ...(rawDataSaveDir && { rawDataSaveDir }),
-      ...(maxItems && { maxItems }),
-      toolName: 'get_tweet_by_id',
-      params: { tweet_ids: tweetIds.join(',') }
-    });
+    const tweets = data.tweets || data.data || [];
+    const cleaned = DataCleaners.cleanTweetList(tweets);
+    return this.formatResponse(cleaned, { ...(saveDir && { saveDir }), toolName: 'get_tweet_by_id' });
   }
 
   private async getTweetReplies(
@@ -717,7 +738,7 @@ class TwitterAPIMCPServer {
     cursor?: string,
     sinceTime?: number,
     untilTime?: number,
-    rawDataSaveDir?: string,
+    saveDir?: string,
     maxItems?: number
   ): Promise<CallToolResult> {
     const params: Record<string, any> = { tweetId };
@@ -726,11 +747,13 @@ class TwitterAPIMCPServer {
     if (untilTime) params.untilTime = untilTime;
 
     const data = await this.makeRequest(`/tweet/replies`, params);
-    return this.jsonHandler.formatResponse(data, {
-      ...(rawDataSaveDir && { rawDataSaveDir }),
-      ...(maxItems && { maxItems }),
+    const tweets = data.tweets || data.replies || data.data || [];
+    const max = maxItems || 10;
+    const cleaned = DataCleaners.cleanTweetList(tweets).slice(0, max);
+    return this.formatResponse(cleaned, {
+      ...(saveDir && { saveDir }),
       toolName: 'get_tweet_replies',
-      params: { tweetId, cursor, sinceTime, untilTime }
+      pagination: { has_next_page: data.has_next_page, next_cursor: data.next_cursor }
     });
   }
 
@@ -738,7 +761,7 @@ class TwitterAPIMCPServer {
     username: string,
     cursor?: string,
     pageSize: number = 200,
-    rawDataSaveDir?: string,
+    saveDir?: string,
     maxItems?: number
   ): Promise<CallToolResult> {
     const params: Record<string, any> = {
@@ -748,11 +771,13 @@ class TwitterAPIMCPServer {
     if (cursor) params.cursor = cursor;
 
     const data = await this.makeRequest(`/user/followers`, params);
-    return this.jsonHandler.formatResponse(data, {
-      ...(rawDataSaveDir && { rawDataSaveDir }),
-      ...(maxItems && { maxItems }),
+    const users = data.users || data.followers || data.data || [];
+    const max = maxItems || 10;
+    const cleaned = DataCleaners.cleanUserList(users).slice(0, max);
+    return this.formatResponse(cleaned, {
+      ...(saveDir && { saveDir }),
       toolName: 'get_user_followers',
-      params: { username, cursor, pageSize }
+      pagination: { has_next_page: data.has_next_page, next_cursor: data.next_cursor }
     });
   }
 
@@ -760,7 +785,7 @@ class TwitterAPIMCPServer {
     username: string,
     cursor?: string,
     pageSize: number = 200,
-    rawDataSaveDir?: string,
+    saveDir?: string,
     maxItems?: number
   ): Promise<CallToolResult> {
     const params: Record<string, any> = {
@@ -770,24 +795,28 @@ class TwitterAPIMCPServer {
     if (cursor) params.cursor = cursor;
 
     const data = await this.makeRequest(`/user/followings`, params);
-    return this.jsonHandler.formatResponse(data, {
-      ...(rawDataSaveDir && { rawDataSaveDir }),
-      ...(maxItems && { maxItems }),
+    const users = data.followings || data.users || data.data || [];
+    const max = maxItems || 10;
+    const cleaned = DataCleaners.cleanUserList(users).slice(0, max);
+    return this.formatResponse(cleaned, {
+      ...(saveDir && { saveDir }),
       toolName: 'get_user_following',
-      params: { username, cursor, pageSize }
+      pagination: { has_next_page: data.has_next_page, next_cursor: data.next_cursor }
     });
   }
 
-  private async searchUsers(query: string, cursor?: string, rawDataSaveDir?: string, maxItems?: number): Promise<CallToolResult> {
+  private async searchUsers(query: string, cursor?: string, saveDir?: string, maxItems?: number): Promise<CallToolResult> {
     const params: Record<string, any> = { query };
     if (cursor) params.cursor = cursor;
 
     const data = await this.makeRequest(`/user/search`, params);
-    return this.jsonHandler.formatResponse(data, {
-      ...(rawDataSaveDir && { rawDataSaveDir }),
-      ...(maxItems && { maxItems }),
+    const users = data.users || data.data || [];
+    const max = maxItems || 10;
+    const cleaned = DataCleaners.cleanUserList(users).slice(0, max);
+    return this.formatResponse(cleaned, {
+      ...(saveDir && { saveDir }),
       toolName: 'search_users',
-      params: { query, cursor }
+      pagination: { has_next_page: data.has_next_page, next_cursor: data.next_cursor }
     });
   }
 
